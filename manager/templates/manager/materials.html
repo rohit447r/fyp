@@ -1,0 +1,233 @@
+{%extends 'manager/layout.html'%}
+{%block body%}
+
+    <div class="container">
+        <!-- Add Material Button -->
+        <a href="{%url 'add_material'%}" id="add-material-button" class="btn btn-primary float-right mt-3">
+            <i class="fas fa-plus"></i> Add Material
+        </a>
+        
+        
+
+
+
+        
+        
+
+        <!-- Material List -->
+        <h2>Materials</h2>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Material Name</th>
+                    <th>Quantity (units)</th>
+                    <th>Cost per Unit</th>
+                    <th>Total Price</th>
+                </tr>
+            </thead>
+                
+            <tbody>
+                <!-- Material rows go here -->
+                {% for material in materials %}
+                    <tr data-material-id="{{ material.id }}">
+                        <td> {{forloop.counter}} </td>
+                        <td>{{ material.name }}</td>
+                        <td>{{ material.quantity }}</td>
+                        <td>{{material.unit_price}}</td>
+                        <td class="total-price">0.00</td>
+                        <td>
+                            <button type="button" class="btn btn-danger delete-material">
+                                Delete
+                            </button>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5" id="no-materials-message">No materials available</td>
+                    </tr>
+                {% endfor %}
+                <tr>
+                    <td colspan="4">Total Price:</td>
+                    <td id="total-price">0.00</td>
+                </tr>
+            </tbody>
+
+            
+        </table>
+        <!--update button-->
+        <a href="{%url 'update_material'%}" id="add-material-button" class="btn btn-primary float-left mt-3">
+            <i class="fas fa-plus"></i> Update Material
+        </a>
+        <!--Clear material button-->
+        <button type="button" id="clear-material-data" class="btn btn-danger float-right mt-3">
+            <i class="fas fa-times"></i> Clear Material Data
+        </button>
+    </div>
+    
+    <!-- The rest of your page content goes here -->
+    <style>
+        /* Add borders to the table */
+        table {
+            border: 2px solid #ccc;
+        }
+
+        /* Style the Add Material button */
+        .btn-primary {
+            background-color: #007BFF;
+            border-color: #007BFF;
+        }
+
+        .btn-primary:hover {
+            background-color: #0056b3;
+            border-color: #0056b3;
+        }
+    </style>
+
+    <script src="https://kit.fontawesome.com/a076d05399.js"></script>
+    <script>
+
+        document.addEventListener("DOMContentLoaded", function () {
+            var materialForm = {
+                name: "{{ form.name.value }}",
+                quantity: "{{ form.quantity.value }}"
+            };
+
+            const materials = document.querySelectorAll(".total-price");
+            let totalPrice = 0.0;
+
+            materials.forEach(function (material) {
+                const quantity = parseFloat(material.parentElement.querySelector("td:nth-child(3)").textContent);
+                const unitPrice = parseFloat(material.parentElement.querySelector("td:nth-child(4)").textContent);
+                const total = (quantity * unitPrice).toFixed(2);
+                totalPrice += parseFloat(total);
+                material.textContent = total;
+            });
+
+            document.getElementById("total-price").textContent = totalPrice.toFixed(2);
+
+            // Handle the "Clear Material Data" button click
+            const clearButton = document.getElementById("clear-material-data");
+            clearButton.addEventListener("click", function () {
+                const materialRows = document.querySelectorAll("table tbody tr");
+                
+                // Loop through each material row and clear its data
+                materialRows.forEach(function (materialRow) {
+                    materialRow.querySelector("td:nth-child(2)").textContent = ''; // Quantity
+                    materialRow.querySelector("td:nth-child(3)").textContent = ''; // Unit Price
+                    materialRow.querySelector(".total-price").textContent = '0.00'; // Total Price
+                });
+
+                // Update the total price to 0.00
+                document.getElementById("total-price").textContent = '0.00';
+            });
+
+            const deleteButtons = document.querySelectorAll(".delete-material");
+            deleteButtons.forEach(function (deleteButton) {
+                deleteButton.addEventListener("click", function () {
+                    const materialRow = deleteButton.parentElement.parentElement;
+                    const materialId = materialRow.getAttribute('data-material-id'); 
+
+                    // Send an AJAX request to delete the material
+                    fetch(`delete_material/${materialId}/`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken'), // Include CSRF token
+                            'Content-Type': 'application/json', // Set content type if needed
+                        },
+                    })
+                    .then(response => {
+                        if (response.ok) {
+                            // Successful deletion, remove the row on the client-side
+                            materialRow.remove();
+                            updateTotalPrice();
+                        } else {
+                            // Handle errors if needed
+                        }
+                    });
+                });
+            });
+
+            function updateTotalPrice() {
+                const materials = document.querySelectorAll(".total-price");
+                let totalAllMaterialsPrice = 0.0;
+
+                materials.forEach(function (material) {
+                    const quantityCell = material.parentElement.querySelector("td:nth-child(3)");
+                    const unitPriceCell = material.parentElement.querySelector("td:nth-child(4)");
+
+                    // Parse quantity and unit price, and check for valid numbers
+                    const quantity = parseFloat(quantityCell.textContent);
+                    const unitPrice = parseFloat(unitPriceCell.textContent);
+
+                    // Check for NaN or undefined values
+                    if (!isNaN(quantity) && !isNaN(unitPrice)) {
+                        const total = (quantity * unitPrice).toFixed(2);
+                        totalAllMaterialsPrice += parseFloat(total);
+                        material.textContent = total;
+                    } else {
+                        material.textContent = '0.00';
+                    }
+                });
+
+                // Update the total price for all materials
+                document.getElementById("total-price").textContent = totalAllMaterialsPrice.toFixed(2);
+            }
+
+            function getCookie(name) {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                
+                if (parts.length === 2) {
+                    return parts.pop().split(';').shift();
+                }
+            }
+            // To show no materials message after deleting every material on the page.
+            function updateNoMaterialsMessage() {
+                const tableBody = document.querySelector("table tbody");
+                const noMaterialsMessage = document.getElementById("no-materials-message");
+                // debugging purposes 
+                console.log(tableBody);
+                console.log(noMaterialsMessage);
+
+
+                if (tableBody.children.length === 2) {
+                    // No materials in the table, show the message
+                    noMaterialsMessage.style.display = "table-cell";
+                } else {
+                    // Materials exist, hide the message
+                    noMaterialsMessage.style.display = "none";
+                }
+            }
+
+            // Call the function when the page loads
+            updateNoMaterialsMessage();
+            $(document).ready(function() {
+            // Add a click event listener to the button
+            $("#add-material-button").click(function() {
+                // Make an AJAX request to trigger the material quantity update
+                $.ajax({
+                    url: '/manager/update_material_quantity/',  // Replace with your actual URL
+                    type: 'POST',
+                    data: {
+                        // Include any data needed to update the material quantity
+                        name: materialForm.name,
+                        quantity: materialForm.quantity
+                    },
+                    success: function(response) {
+                        // Handle the success response
+                        console.log(response.message);
+                    },
+                    error: function(xhr, errmsg, err) {
+                        // Handle the error
+                        console.log(err);
+                    }
+                });
+            });
+        });
+        });
+
+        
+
+    </script>
+{%endblock%}
